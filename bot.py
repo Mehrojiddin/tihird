@@ -7,6 +7,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, PollAnswerHandler
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
+REPORT_INTERVAL_SECONDS = 5 * 60 * 60
 
 YES_JOKES = [
     "🔥 {name} — ана мард! ⚽ Бутсиро тайёр кун, майдон интизор аст! 😎",
@@ -38,7 +39,8 @@ CHANGED_TO_NO = [
 ]
 
 poll_chats = {}
-user_choices = {}
+poll_votes = {}
+report_tasks = {}
 
 web = Flask(__name__)
 
@@ -50,6 +52,33 @@ def health():
 def run_web():
     port = int(os.getenv("PORT", "10000"))
     web.run(host="0.0.0.0", port=port, use_reloader=False)
+
+
+def build_report(poll_id: str) -> str:
+    votes = poll_votes.get(poll_id, {})
+    yes_names = [data["name"] for data in votes.values() if data["choice"] == 0]
+    no_names = [data["name"] for data in votes.values() if data["choice"] == 1]
+
+    yes_list = "\n".join(f"• {name}" for name in yes_names) if yes_names else "• Ҳоло касе нест"
+    no_list = "\n".join(f"• {name}" for name in no_names) if no_names else "• Ҳоло касе нест"
+
+    return (
+        "⚽ НАТИҶАИ ОВОЗДИҲӢ\n\n"
+        f"✅ Мераванд: {len(yes_names)} нафар\n"
+        f"{yes_list}\n\n"
+        f"❌ Намеравад: {len(no_names)} нафар\n"
+        f"{no_list}\n\n"
+        f"🔥 Ҳозир барои футбол {len(yes_names)} бозингар ҷамъ шуд!"
+    )
+
+
+async def periodic_report(bot, poll_id: str, chat_id: int):
+    try:
+        while True:
+            await asyncio.sleep(REPORT_INTERVAL_SECONDS)
+            await bot.send_message(chat_id=chat_id, text=build_report(poll_id))
+    except asyncio.CancelledError:
+        pass
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -72,7 +101,12 @@ async def football(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if msg.poll:
-        poll_chats[msg.poll.id] = update.effective_chat.id
+        poll_id = msg.poll.id
+        poll_chats[poll_id] = update.effective_chat.id
+        poll_votes[poll_id] = {}
+        report_tasks[poll_id] = asyncio.create_task(
+            periodic_report(context.bot, poll_id, update.effective_chat.id)
+        )
 
 
 async def poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -85,15 +119,17 @@ async def poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     user = answer.user
-    name = user.first_name or user.full_name or "Дӯстам"
+    name = user.full_name or user.first_name or "Дӯстам"
+    votes = poll_votes.setdefault(answer.poll_id, {})
+    previous_data = votes.get(user.id)
 
     if not answer.option_ids:
+        votes.pop(user.id, None)
         return
 
     choice = answer.option_ids[0]
-    key = (answer.poll_id, user.id)
-    previous = user_choices.get(key)
-    user_choices[key] = choice
+    previous = previous_data["choice"] if previous_data else None
+    votes[user.id] = {"name": name, "choice": choice}
 
     if previous is not None and previous != choice:
         text = random.choice(CHANGED_TO_YES if choice == 0 else CHANGED_TO_NO).format(name=name)
