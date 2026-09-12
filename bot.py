@@ -66,7 +66,7 @@ async def football(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = await context.bot.send_poll(
         chat_id=update.effective_chat.id,
         question="⚽ Футбол мерем?",
-        options=["✅ Бале", "❌ Не"],
+        options=["Бале", "Не"],
         is_anonymous=False,
         allows_multiple_answers=False,
     )
