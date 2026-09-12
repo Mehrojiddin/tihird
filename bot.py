@@ -1,6 +1,7 @@
 import os
 import random
 import threading
+import asyncio
 from flask import Flask
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, PollAnswerHandler
@@ -109,6 +110,7 @@ def main():
         raise RuntimeError("BOT_TOKEN is not set")
 
     threading.Thread(target=run_web, daemon=True).start()
+    asyncio.set_event_loop(asyncio.new_event_loop())
 
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
