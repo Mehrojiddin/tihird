@@ -1,0 +1,21 @@
+services:
+  - type: worker
+    name: xysravbot
+    runtime: python
+    plan: starter
+    region: frankfurt
+    rootDir: xysravbot
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    autoDeployTrigger: commit
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4.1-mini
+      - key: REPLY_CHANCE
+        value: '0.08'
+      - key: COOLDOWN_SECONDS
+        value: '120'
